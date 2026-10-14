@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weekflow — Weekly Planner</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{color-scheme:dark;--bg:#0b1020;--panel:#11182b;--panel2:#151e34;--line:#27334c;--muted:#91a0bb;--text:#edf2ff;--accent:#8b9cff;--hour:64px}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 15% -10%,#1c2a50 0,transparent 42%),var(--bg);color:var(--text);font:14px/1.45 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+button,input,textarea,select{font:inherit}button{cursor:pointer}
+.app{max-width:1800px;margin:auto;padding:26px clamp(12px,2.5vw,36px) 40px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:22px}
+.brand{display:flex;align-items:center;gap:12px}.logo{width:42px;height:42px;border-radius:14px;background:linear-gradient(135deg,#9aabff,#6b6cf6);display:grid;place-items:center;color:#10152a;font-size:22px;font-weight:900;box-shadow:0 8px 24px #6474ed35}
+h1{font-size:24px;letter-spacing:-.7px;margin:0}.subtitle{color:var(--muted);margin-top:2px;font-size:13px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.btn{border:1px solid var(--line);background:#172139;color:var(--text);border-radius:11px;padding:10px 14px;font-weight:650;transition:.15s}.btn:hover{border-color:#7285bd;background:#202c49}.btn.primary{background:#8999ff;border-color:#8999ff;color:#0b1230}.btn.primary:hover{background:#a4b0ff}
+.summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:18px}.stat{background:linear-gradient(140deg,#151f36,#101729);border:1px solid var(--line);border-radius:15px;padding:15px 17px}.stat-label{font-size:12px;color:var(--muted)}.stat-value{font-size:23px;font-weight:750;letter-spacing:-.5px;margin-top:4px}.stat-note{font-size:11px;color:#8d9bb5;margin-top:1px}
+.toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}.legend{display:flex;align-items:center;gap:13px;flex-wrap:wrap;color:var(--muted);font-size:12px}.dot{display:inline-block;width:8px;height:8px;border-radius:3px;margin-right:5px}
+.calendar-shell{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#0e1526;box-shadow:0 20px 65px #0002}.calendar-scroll{overflow:auto;max-height:calc(100vh - 270px);min-height:480px}
+.calendar{display:grid;grid-template-columns:66px repeat(7,minmax(142px,1fr));min-width:1120px}
+.head{position:sticky;top:0;z-index:8;background:#121b30;border-bottom:1px solid var(--line);height:68px;display:flex;flex-direction:column;justify-content:center;padding:8px 10px;text-align:center}.head.timehead{left:0;z-index:10;align-items:center;color:var(--muted);font-size:11px}.dayname{font-size:11px;text-transform:uppercase;letter-spacing:1.1px;color:#9aa8c4;font-weight:750}.daydate{font-size:17px;font-weight:750;margin-top:3px}.dayhead.today .daydate{color:#aab5ff}
+.time-col{position:relative;background:#0e1526;border-right:1px solid var(--line)}.time-label{height:var(--hour);position:relative;text-align:right;padding:0 9px 0 0;color:#8392ad;font-size:11px;transform:translateY(-7px);font-variant-numeric:tabular-nums}
+.daycol{position:relative;border-right:1px solid #222d43;background-image:repeating-linear-gradient(to bottom,transparent 0,transparent calc(var(--hour) - 1px),#29344a calc(var(--hour) - 1px),#29344a var(--hour)),repeating-linear-gradient(to bottom,transparent 0,transparent calc(var(--hour)/2 - 1px),#1b263a calc(var(--hour)/2 - 1px),#1b263a calc(var(--hour)/2));}
+.daycol:last-child{border-right:0}.daycol.today{background-color:#111b31}.daycol.dragover{background-color:#192746}
+.event{position:absolute;border-radius:8px;border:1px solid color-mix(in srgb,var(--ev) 75%,white 7%);border-left:3px solid var(--ev);background:color-mix(in srgb,var(--ev) 20%,#121a2c);padding:7px 7px 6px;overflow:hidden;min-width:0;z-index:2;box-shadow:0 3px 9px #0002;cursor:pointer;transition:filter .12s,transform .12s}
+.event:hover{filter:brightness(1.17);z-index:5;transform:translateY(-1px)}.event-title{font-weight:750;font-size:12px;line-height:1.3;overflow-wrap:anywhere}.event-time{font-size:10px;color:#d0d8ef;margin-top:4px;font-variant-numeric:tabular-nums}.event-location{font-size:10px;color:#bdc9e4;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.event-desc{font-size:10px;color:#b1bfd9;margin-top:4px;line-height:1.3;overflow-wrap:anywhere}
+.empty{padding:34px;text-align:center;color:var(--muted)}.footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:#8391ab;font-size:11px;padding:12px 2px}
+.modal-backdrop{position:fixed;inset:0;background:#050914c9;backdrop-filter:blur(8px);z-index:30;display:none;align-items:center;justify-content:center;padding:16px}.modal-backdrop.open{display:flex}.modal{width:min(620px,100%);max-height:92vh;overflow:auto;border:1px solid #34415f;background:#111a2d;border-radius:20px;box-shadow:0 28px 90px #0008;padding:22px}.modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}.modal h2{font-size:20px;margin:0;letter-spacing:-.4px}.xbtn{border:0;background:#202b43;color:#dce5ff;border-radius:9px;width:34px;height:34px;font-size:20px}
+.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:13px}.field{display:flex;flex-direction:column;gap:6px;min-width:0}.field.full{grid-column:1/-1}.field label{font-size:12px;color:#aab7d0;font-weight:650}.field input,.field textarea,.field select{width:100%;background:#0b1222;border:1px solid #303d58;border-radius:10px;padding:10px 11px;color:var(--text);outline:none}.field input:focus,.field textarea:focus,.field select:focus{border-color:#8999ff;box-shadow:0 0 0 3px #8999ff20}.field textarea{resize:vertical;min-height:78px}.hint{font-size:11px;color:#8493af}.days{display:flex;gap:6px;flex-wrap:wrap}.daycheck{position:relative}.daycheck input{position:absolute;opacity:0;pointer-events:none}.daycheck span{display:block;border:1px solid #34415b;border-radius:8px;padding:7px 10px;color:#b6c2d9;background:#0d1425;font-size:12px;cursor:pointer}.daycheck input:checked+span{background:#7e8ef2;color:#0a1129;border-color:#9ba7ff;font-weight:750}.colors{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.colorpick{position:relative}.colorpick input{position:absolute;opacity:0}.colorpick span{display:block;width:26px;height:26px;border-radius:9px;background:var(--c);border:2px solid transparent;cursor:pointer}.colorpick input:checked+span{outline:2px solid #edf2ff;outline-offset:2px}
+.formfoot{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-top:20px}.right-actions{display:flex;gap:8px}.danger{background:#351d2a;border-color:#6d344a;color:#ffb8c9}.hidden{display:none!important}.syncstatus{font-size:12px;color:var(--muted)}.authback{position:fixed;inset:0;background:#050914dc;z-index:40;display:none;align-items:center;justify-content:center;padding:16px}.authback.open{display:flex}.authbox{width:min(440px,100%);border:1px solid #34415f;background:#111a2d;border-radius:18px;padding:22px}.authbox h2{margin:0 0 8px}.authbox p{color:var(--muted);font-size:13px}.authbox label{display:block;font-size:12px;color:#aab7d0;margin:12px 0 5px}.authbox input{width:100%;background:#0b1222;border:1px solid #303d58;border-radius:10px;padding:10px;color:var(--text)}.autherror{color:#ff9eae;font-size:12px;margin-top:10px;min-height:18px}
+@media(max-width:650px){.app{padding:16px 10px 26px}h1{font-size:21px}.summary{gap:7px}.stat{padding:11px}.stat-value{font-size:19px}.stat-note{display:none}.calendar-scroll{max-height:70vh}.formgrid{grid-template-columns:1fr}.field.full{grid-column:auto}.modal{padding:17px}.top{align-items:flex-start}.actions .btn{padding:9px 10px}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><div class="logo">↗</div><div><h1>Weekflow</h1><div class="subtitle">Your week, in focus. · Monday — Sunday</div></div></div>
+    <div class="actions"><span class="syncstatus" id="syncStatus">Set up sync to begin</span><button class="btn" id="authBtn">Sign in</button><button class="btn hidden" id="signOutBtn">Sign out</button><button class="btn" id="todayBtn">Today</button><button class="btn" id="exportBtn">Export backup</button><button class="btn" id="importBtn">Import</button><button class="btn primary" id="addBtn">＋ Add activity</button><input id="importFile" type="file" accept="application/json,.json" class="hidden"></div>
+  </header>
+  <section class="summary">
+    <div class="stat"><div class="stat-label">PLANNED ACTIVITIES</div><div class="stat-value" id="countStat">0</div><div class="stat-note">Recurring events count per day</div></div>
+    <div class="stat"><div class="stat-label">HOURS SCHEDULED</div><div class="stat-value" id="hoursStat">0h</div><div class="stat-note">Total time across the week</div></div>
+    <div class="stat"><div class="stat-label">BUSIEST DAY</div><div class="stat-value" id="busyStat">—</div><div class="stat-note" id="busyNote">Add an activity to get started</div></div>
+  </section>
+  <div class="toolbar"><div class="legend"><span><i class="dot" style="background:#8999ff"></i>Personal</span><span><i class="dot" style="background:#42c6b5"></i>Study / Work</span><span><i class="dot" style="background:#f4b860"></i>Errands</span><span>· Click any activity to edit</span></div><div class="hint">24-hour time · 30-minute grid · Scroll to late evening</div></div>
+  <div class="calendar-shell"><div class="calendar-scroll" id="calendarScroll"><div class="calendar" id="calendar"></div></div></div>
+  <div class="footer"><span>Planner data syncs through your signed-in Supabase account.</span><span>Tip: overlapping events arrange side-by-side. Export backups for safekeeping.</span></div>
+</div>
+
+<div class="modal-backdrop" id="modalBackdrop" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <form class="modal" id="activityForm">
+    <div class="modal-head"><h2 id="modalTitle">Add activity</h2><button type="button" class="xbtn" id="closeModal" aria-label="Close">×</button></div>
+    <input type="hidden" id="eventId">
+    <div class="formgrid">
+      <div class="field full"><label for="title">Activity title *</label><input id="title" required maxlength="90" placeholder="e.g. Lecture, Gym, Sim racing"></div>
+      <div class="field"><label for="startTime">Start time *</label><input id="startTime" type="time" required step="1800" value="09:00"></div>
+      <div class="field"><label for="endTime">End time *</label><input id="endTime" type="time" required step="1800" value="10:00"></div>
+      <div class="field"><label for="location">Location</label><input id="location" maxlength="120" placeholder="e.g. University, Home"></div>
+      <div class="field"><label for="repeatMode">Repeat</label><select id="repeatMode"><option value="once">One day only</option><option value="weekly">Every selected weekday</option></select></div>
+      <div class="field full"><label>Day(s)</label><div class="days" id="dayChoices"></div><div class="hint">Choose one or more days. Weekly activities repeat on those days.</div></div>
+      <div class="field full"><label>Color</label><div class="colors" id="colorChoices"></div></div>
+      <div class="field full"><label for="description">Description</label><textarea id="description" maxlength="500" placeholder="Notes, prep, links, or anything to remember…"></textarea></div>
+    </div>
+    <div class="formfoot"><button type="button" class="btn danger hidden" id="deleteBtn">Delete activity</button><div class="right-actions"><button type="button" class="btn" id="cancelBtn">Cancel</button><button type="submit" class="btn primary">Save activity</button></div></div>
+  </form>
+</div>
+<div class="authback" id="authBackdrop" role="dialog" aria-modal="true"><form class="authbox" id="authForm"><h2>Weekflow account</h2><p>Use the same account on iPhone, iPad, and desktop to share your planner.</p><label for="authEmail">Email</label><input id="authEmail" type="email" autocomplete="email" required><label for="authPassword">Password</label><input id="authPassword" type="password" minlength="8" autocomplete="current-password" required><div class="autherror" id="authError"></div><div class="formfoot"><button type="button" class="btn" id="authClose">Close</button><div class="right-actions"><button type="button" class="btn" id="signUpBtn">Sign up</button><button type="submit" class="btn primary">Sign in</button></div></div></form></div>
+<script>
+(() => {
+// Configure these with your Supabase Project URL and publishable/anon key.
+const SUPABASE_URL='https://mmkzzfmwcortuqlrmorn.supabase.co';
+const SUPABASE_ANON_KEY='sb_publishable_205nYmNgGFwEkQrufq4omA_Cyr8HP6P';
+const DAYS=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const SHORT=['MON','TUE','WED','THU','FRI','SAT','SUN'];
+const COLORS=[['#8999ff','Periwinkle'],['#42c6b5','Teal'],['#f4b860','Amber'],['#f17b9a','Rose'],['#b18cff','Violet'],['#62a8f7','Blue'],['#91c96b','Green'],['#e58b54','Orange']];
+const START=6*60, END=25*60, PX_PER_MIN=64/60;
+const $=id=>document.getElementById(id);
+let events=[];
+let supabase=null,currentUser=null,liveChannel=null;
+let editing=null;
+const uid=()=>Math.random().toString(36).slice(2,10)+Date.now().toString(36);
+const toMin=s=>{const [h,m]=s.split(':').map(Number);return h*60+m};
+const fmt=m=>{m=((m%(24*60))+24*60)%(24*60);return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')};
+const duration=e=>{let a=toMin(e.start),b=toMin(e.end);if(b<=a)b+=1440;return b-a};
+const effective=(e,d)=>{let a=toMin(e.start),b=a+duration(e);return {start:a<START?a+1440:a,end:b<START?b+1440:b,day:d}};
+async function save(event){render();if(!currentUser||!supabase){$('syncStatus').textContent='Sign in to save changes';return}const row={user_id:currentUser.id,event_id:event.id,title:event.title,start_time:event.start,end_time:event.end,location:event.location||'',description:event.description||'',days:event.days||[],color:event.color||COLORS[0][0]};const {error}=await supabase.from('planner_events').upsert(row,{onConflict:'user_id,event_id'});if(error){$('syncStatus').textContent='Save failed';alert('Could not sync this activity: '+error.message);await loadEvents()}else $('syncStatus').textContent='All changes synced'}
+function fromRow(r){return {id:r.event_id,title:r.title,start:r.start_time.slice(0,5),end:r.end_time.slice(0,5),location:r.location||'',description:r.description||'',days:r.days||[],color:r.color||COLORS[0][0]}}
+async function loadEvents(){if(!currentUser){events=[];render();return} $('syncStatus').textContent='Syncing…';const {data,error}=await supabase.from('planner_events').select('*').order('created_at');if(error){$('syncStatus').textContent='Sync error';console.error(error);return}events=(data||[]).map(fromRow);render();$('syncStatus').textContent='Synced · '+currentUser.email}
+function onAuthChanged(session){currentUser=session?.user||null;$('authBtn').classList.toggle('hidden',!!currentUser);$('signOutBtn').classList.toggle('hidden',!currentUser);if(liveChannel){supabase.removeChannel(liveChannel);liveChannel=null}if(currentUser){liveChannel=supabase.channel('weekflow-'+currentUser.id).on('postgres_changes',{event:'*',schema:'public',table:'planner_events',filter:'user_id=eq.'+currentUser.id},()=>loadEvents()).subscribe();loadEvents()}else{events=[];render();$('syncStatus').textContent='Signed out · sign in to sync'}}
+function buildHeaders(){
+ const cal=$('calendar');cal.innerHTML='';
+ const blank=document.createElement('div');blank.className='head timehead';blank.textContent='TIME';cal.append(blank);
+ const now=new Date();let mondayOffset=(now.getDay()+6)%7;
+ DAYS.forEach((day,i)=>{let h=document.createElement('div');h.className='head dayhead'+(i===mondayOffset?' today':'');h.innerHTML=`<div class="dayname">${SHORT[i]}</div><div class="daydate">${day}</div>`;cal.append(h)});
+ const tc=document.createElement('div');tc.className='time-col';tc.style.height=((END-START)*PX_PER_MIN)+'px';
+ for(let t=START;t<END;t+=60){let l=document.createElement('div');l.className='time-label';l.style.height=(60*PX_PER_MIN)+'px';l.textContent=fmt(t);tc.append(l)}cal.append(tc);
+ const cols=[];
+ DAYS.forEach((day,i)=>{let c=document.createElement('div');c.className='daycol'+(i===mondayOffset?' today':'');c.style.height=((END-START)*PX_PER_MIN)+'px';c.dataset.day=i;c.addEventListener('click',ev=>{if(ev.target===c){const r=c.getBoundingClientRect();let mins=START+Math.floor((ev.clientY-r.top)/PX_PER_MIN/30)*30;openNew(i,fmt(mins%1440),fmt((mins+60)%1440))}});c.addEventListener('dragover',ev=>{ev.preventDefault();c.classList.add('dragover')});c.addEventListener('dragleave',()=>c.classList.remove('dragover'));c.addEventListener('drop',ev=>{ev.preventDefault();c.classList.remove('dragover');let id=ev.dataTransfer.getData('text/plain');let e=events.find(x=>x.id===id);if(e){e.days=[i];save(e)}});cal.append(c);cols.push(c)});
+ return cols;
+}
+function layoutOverlaps(list){
+ // Greedy interval partitioning. Each connected overlap cluster gets its own lanes.
+ list.sort((a,b)=>a.s-b.s||b.e-a.e);
+ let clusters=[],cluster=[],maxEnd=-1;
+ list.forEach(x=>{if(cluster.length&&x.s>=maxEnd){clusters.push(cluster);cluster=[];maxEnd=-1}cluster.push(x);maxEnd=Math.max(maxEnd,x.e)});
+ if(cluster.length)clusters.push(cluster);
+ clusters.forEach(items=>{
+   let laneEnds=[];
+   items.forEach(item=>{let lane=laneEnds.findIndex(end=>end<=item.s);if(lane<0){lane=laneEnds.length;laneEnds.push(item.e)}else laneEnds[lane]=item.e;item.lane=lane});
+   const n=laneEnds.length;items.forEach(item=>{item.lanes=n});
+ });
+}
+function render(){
+ const cols=buildHeaders(), occurrences=[];
+ events.forEach(e=>(e.days||[]).forEach(day=>{
+   let s=toMin(e.start),dur=duration(e),absolute=s<START?s+1440:s, end=Math.min(absolute+dur,END);
+   // Events starting before 06:00 are displayed only if they cross into the visible day.
+   if(absolute>=END||end<=START)return;
+   if(absolute<START){end-=START;absolute=START}
+   if(absolute>=END)return;
+   occurrences.push({event:e,day,s:absolute,end});
+ }));
+ for(let d=0;d<7;d++){
+   const items=occurrences.filter(o=>o.day===d);layoutOverlaps(items);
+   items.forEach(o=>{
+     let top=(o.s-START)*PX_PER_MIN, height=Math.max(22,(o.end-o.s)*PX_PER_MIN);
+     let el=document.createElement('div');el.className='event';el.style.setProperty('--ev',o.event.color || '#8999ff');
+     el.style.top=top+'px';el.style.height=height+'px';
+     const left=o.lane/o.lanes*100,right=(o.lane+1)/o.lanes*100;
+     el.style.left=`calc(${left}% + 3px)`;el.style.width=`calc(${right-left}% - 6px)`;
+     const ev=o.event;el.draggable=true;el.addEventListener('dragstart',e=>e.dataTransfer.setData('text/plain',ev.id));el.title=[ev.title,ev.location,ev.description].filter(Boolean).join('\n');
+     el.innerHTML=`<div class="event-title"></div><div class="event-time"></div>${ev.location?'<div class="event-location"></div>':''}${ev.description&&height>54?'<div class="event-desc"></div>':''}`;
+     el.querySelector('.event-title').textContent=ev.title;
+     el.querySelector('.event-time').textContent=fmt(toMin(ev.start))+'–'+fmt((toMin(ev.start)+duration(ev))%1440);
+     if(ev.location)el.querySelector('.event-location').textContent='⌖ '+ev.location;
+     if(ev.description&&height>54)el.querySelector('.event-desc').textContent=ev.description;
+     el.addEventListener('click',e=>{e.stopPropagation();openEdit(ev.id)});cols[d].append(el);
+   });
+ }
+ updateStats(occurrences);
+}
+function updateStats(occ){
+ $('countStat').textContent=occ.length;
+ const mins=occ.reduce((sum,o)=>sum+Math.max(0,Math.min(o.end,END)-Math.max(o.s,START)),0);
+ $('hoursStat').textContent=(mins/60).toLocaleString(undefined,{maximumFractionDigits:1})+'h';
+ const per=DAYS.map((name,i)=>({name,n:occ.filter(o=>o.day===i).reduce((sum,o)=>sum+Math.max(0,Math.min(o.end,END)-Math.max(o.s,START)),0)})).sort((a,b)=>b.n-a.n);
+ $('busyStat').textContent=per[0]&&per[0].n?per[0].name:'—';$('busyNote').textContent=per[0]&&per[0].n?`${(per[0].n/60).toFixed(1)} scheduled hours`:'Add an activity to get started';
+}
+function makeChoices(){
+ $('dayChoices').innerHTML='';DAYS.forEach((d,i)=>{let lab=document.createElement('label');lab.className='daycheck';lab.innerHTML=`<input type="checkbox" value="${i}"><span>${SHORT[i]}</span>`;$('dayChoices').append(lab)});
+ $('colorChoices').innerHTML='';COLORS.forEach(([c,n],i)=>{let lab=document.createElement('label');lab.className='colorpick';lab.title=n;lab.innerHTML=`<input type="radio" name="evcolor" value="${c}" ${i===0?'checked':''}><span style="--c:${c}"></span>`;$('colorChoices').append(lab)});
+}
+function selectedDays(){return [...$('dayChoices').querySelectorAll('input:checked')].map(x=>Number(x.value))}
+function setDays(days){$('dayChoices').querySelectorAll('input').forEach(x=>x.checked=days.includes(Number(x.value)))}
+function openNew(day=0,start='09:00',end='10:00'){
+ if(!currentUser){$('authBtn').click();return}
+ editing=null;$('activityForm').reset();$('eventId').value='';$('modalTitle').textContent='Add activity';$('deleteBtn').classList.add('hidden');
+ $('startTime').value=start;$('endTime').value=end;$('repeatMode').value='once';setDays([day]);$('colorChoices').querySelectorAll('input').forEach((x,i)=>x.checked=i===0);$('modalBackdrop').classList.add('open');$('title').focus();
+}
+function openEdit(id){
+ if(!currentUser){$('authBtn').click();return}
+ const e=events.find(x=>x.id===id);if(!e)return;editing=id;
+ $('eventId').value=id;$('title').value=e.title;$('startTime').value=e.start;$('endTime').value=e.end;$('location').value=e.location||'';$('description').value=e.description||'';
+ $('repeatMode').value=(e.days||[]).length>1?'weekly':'once';setDays(e.days||[]);$('colorChoices').querySelectorAll('input').forEach(x=>x.checked=x.value===e.color);
+ $('modalTitle').textContent='Edit activity';$('deleteBtn').classList.remove('hidden');$('modalBackdrop').classList.add('open');
+}
+function close(){ $('modalBackdrop').classList.remove('open') }
+$('addBtn').addEventListener('click',()=>openNew());
+$('closeModal').addEventListener('click',close);$('cancelBtn').addEventListener('click',close);
+$('modalBackdrop').addEventListener('click',e=>{if(e.target===$('modalBackdrop'))close()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')close()});
+$('repeatMode').addEventListener('change',()=>{if($('repeatMode').value==='once'){let ds=selectedDays();if(ds.length>1)setDays([ds[0]])}});
+$('activityForm').addEventListener('submit',async e=>{
+ e.preventDefault();const title=$('title').value.trim();if(!title)return;
+ let days=selectedDays();if(!days.length){alert('Choose at least one day.');return}
+ if($('repeatMode').value==='once')days=[days[0]];
+ const start=$('startTime').value,end=$('endTime').value;
+ if(!start||!end||duration({start,end})<=0){alert('Please choose a valid start and end time. End time may be after midnight.');return}
+ const obj={id:editing||uid(),title,start,end,location:$('location').value.trim(),description:$('description').value.trim(),days,color:$('colorChoices').querySelector('input:checked')?.value||COLORS[0][0]};
+ const index=events.findIndex(x=>x.id===obj.id);if(index>=0)events[index]=obj;else events.push(obj);
+ close();await save(obj);
+});
+$('deleteBtn').addEventListener('click',async()=>{if(!editing)return;const e=events.find(x=>x.id===editing);if(confirm(`Delete "${e?.title||'this activity'}" and all its recurring instances?`)){events=events.filter(x=>x.id!==editing);render();let {error}=await supabase.from('planner_events').delete().eq('user_id',currentUser.id).eq('event_id',editing);if(error){alert('Could not delete this activity: '+error.message);await loadEvents()}else $('syncStatus').textContent='All changes synced';close()}});
+$('todayBtn').addEventListener('click',()=>{const d=new Date();const day=(d.getDay()+6)%7;const col=$('calendar').children[1+7+1+day];if(col)col.scrollIntoView({block:'nearest',inline:'center',behavior:'smooth'});$('calendarScroll').scrollTo({top:Math.max(0,(d.getHours()*60+d.getMinutes()-START)*PX_PER_MIN-160),behavior:'smooth'})});
+$('exportBtn').addEventListener('click',()=>{const blob=new Blob([JSON.stringify({app:'Weekflow',version:1,events},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='weekflow-backup.json';a.click();URL.revokeObjectURL(a.href)});
+$('importBtn').addEventListener('click',()=>$('importFile').click());
+$('importFile').addEventListener('change',async e=>{const f=e.target.files[0];if(!f)return;try{if(!currentUser)throw Error('Sign in before importing activities.');const data=JSON.parse(await f.text()),incoming=Array.isArray(data)?data:data.events;if(!Array.isArray(incoming))throw Error('This file does not contain Weekflow activities.');if(confirm('Import will replace the activities in your shared planner. Continue?')){let replacement=incoming.filter(x=>x&&x.title&&x.start&&x.end&&Array.isArray(x.days)).map(x=>({...x,id:uid(),color:x.color||COLORS[0][0]}));const {error:delError}=await supabase.from('planner_events').delete().eq('user_id',currentUser.id);if(delError)throw delError;if(replacement.length){const rows=replacement.map(x=>({user_id:currentUser.id,event_id:x.id,title:x.title,start_time:x.start,end_time:x.end,location:x.location||'',description:x.description||'',days:x.days,color:x.color}));const {error}=await supabase.from('planner_events').insert(rows);if(error)throw error}events=replacement;render();$('syncStatus').textContent='Imported and synced'}}catch(err){alert('Could not import this file: '+err.message);await loadEvents()}e.target.value=''});
+$('authBtn').addEventListener('click',()=>{$('authError').textContent='';$('authBackdrop').classList.add('open')});$('authClose').addEventListener('click',()=>$('authBackdrop').classList.remove('open'));$('authBackdrop').addEventListener('click',e=>{if(e.target===$('authBackdrop'))$('authBackdrop').classList.remove('open')});$('signOutBtn').addEventListener('click',async()=>{await supabase.auth.signOut()});
+async function auth(mode){$('authError').textContent='';if(!supabase){$('authError').textContent='Add your Supabase URL and publishable key in the HTML setup section first.';return}const email=$('authEmail').value,password=$('authPassword').value;const result=mode==='signup'?await supabase.auth.signUp({email,password}):await supabase.auth.signInWithPassword({email,password});if(result.error){$('authError').textContent=result.error.message;return}if(mode==='signup'&&!result.data.session){$('authError').textContent='Check your email to confirm your account, then sign in.';return}$('authBackdrop').classList.remove('open')}
+$('authForm').addEventListener('submit',e=>{e.preventDefault();auth('signin')});$('signUpBtn').addEventListener('click',()=>auth('signup'));$('addBtn').addEventListener('click',e=>{if(!currentUser){e.preventDefault();$('authBtn').click()}});$('importBtn').addEventListener('click',e=>{if(!currentUser){e.preventDefault();$('authBtn').click()}});
+makeChoices();render();if(SUPABASE_URL.startsWith('https://')&&window.supabase){supabase=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);supabase.auth.onAuthStateChange((_event,session)=>onAuthChanged(session));supabase.auth.getSession().then(({data})=>onAuthChanged(data.session))}else{$('syncStatus').textContent='Set up sync in this HTML file';$('authBtn').addEventListener('click',()=>$('authError').textContent='Enter your Supabase URL and publishable key in the HTML first.')}
+})();
+</script>
+</body>
+</html>
